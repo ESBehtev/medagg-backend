@@ -1,0 +1,275 @@
+#!/bin/env bash
+
+######################
+# Available commands #
+######################
+
+setup() {
+    local -r __script_file="$(realpath "${0}")"
+    local -r __project_dir="$(dirname "$__script_file")"
+    local -r __requirements_file="$__project_dir"/requirements.txt
+    local -r __venv_dir="$__project_dir"/.venv
+
+    # Get system python
+    local __python="$(
+        for p in "python" "python3"; do
+            command -v "$p" &>/dev/null && {
+                echo "$p"
+                break
+            }
+        done
+    )"
+
+    if [ -z "$__python" ]; then
+        printf '%s\n' \
+            "Couldn't find Python on your system:" \
+            "--Install it first, then re-run this script."
+        return 1
+    fi
+
+    if ! [ -f "$__venv_dir"/pyvenv.cfg ]; then
+        printf '%s\n' \
+            "Couldn't find Python venv:" \
+            "--Creating a new one in $__venv_dir"
+
+        # Create a virtual environment using system python
+        command "$__python" -m venv --upgrade-deps "$__venv_dir" || {
+            echo "Failed to create Python venv."
+            return 1
+        }
+
+        echo "Successfully installed Python's venv!"
+    fi
+
+    if [ -f "$__requirements_file" ]; then
+        printf '%s\n' \
+            "Trying to install requirements:" \
+            "--Using pip in $__venv_dir/bin" \
+            "--From $__requirements_file"
+
+        # Install requirements using appropriate environment
+        command "$__venv_dir/bin/pip" install -r "$__requirements_file" || {
+            echo "ERROR: Failed to install requirements!"
+            return 1
+        }
+    else
+        echo "WARNING: No $__requirements_file file was found."
+    fi
+
+    # Get system docker
+    local __docker="$(command -v "docker" 2>/dev/null)"
+    if [ -z "$__docker" ]; then
+        printf '%s\n' \
+            "Couldn't find Docker on your system:" \
+            "--Install it first, then re-run this script."
+        return 1
+    fi
+
+    local __cmd=(
+        "$__docker"
+        "compose"
+        "-f" "$__project_dir/docker-compose.yml"
+        "-p" "$(basename "$__project_dir")"
+        "up"
+        "--build"
+        "--detach"
+        "--pull" "missing"
+        "--remove-orphans"
+        "--wait"
+        "--yes"
+    )
+    local __data_dir="$__project_dir"/db/data
+    if [ -d "$__data_dir" ]; then
+        echo "There is already created database in this project."
+        echo -n "Do you want to forcefully recreate it? (Remove database: Y|n): "
+        read -r answer
+
+        if [ -z "$answer" ] || [[ "$answer" =~ ^[yY]$ ]]; then
+            echo "Clean start database."
+            __cmd+=("--force-recreate") # Add flag to 'doker compose' command
+            __cmd+=( # Remove local directory with database data
+                "&&" "sudo" "rm" "-rf" "$__data_dir"
+            )
+        elif [[ "$answer" =~ ^[nN]$ ]]; then
+            echo "Just do what needs to be done."
+        else
+            echo "Invalid input format!"
+            return 1
+        fi
+    else
+        # Always recreate containers in this case
+        __cmd+=("--force-recreate") # Add flag to 'doker compose' command
+        # Create local directory to store db data
+        command "mkdir" "$__data_dir" || {
+            echo "Failed to create data dir $__data_dir."
+            return 1
+        }
+    fi
+
+    # Create docker containers using compose
+    # and remov local data if needed.
+    command "${__cmd[@]}" || {
+        echo "Failed to start database."
+        return 1
+    }
+
+    printf '%s\n' \
+        "Activating Python venv:" \
+        "--Using $__venv_dir/bin/activate script"
+
+    source "$__venv_dir"/bin/activate || {
+        echo "ERROR: Failed to activate Python venv"
+        return 1
+    }
+
+    printf '%s\n' \
+        "Migrating database:" \
+        "--Using $__venv_dir/bin/python executable"
+
+    command "$__venv_dir"/bin/python "$__project_dir"/manage.py migrate || {
+        echo "ERROR: Failed to migrate database"
+        return 1
+    }
+
+    echo "You are good to go!"
+}
+
+################
+# Begin script #
+################
+
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+    # Sourcing script only once using global variable
+    declare -gr _LAZY_INIT_MEDAGG_CONF="" 2>/dev/null && {
+        # Make sure we captured first script source
+        # during whole current terminal sesion
+        export _LAZY_INIT_MEDAGG_CONF
+
+        alias medagg="python manage.py"
+
+        SCRIPT_FILE="$(realpath "$0")"
+        ENV_DIR=".env"
+
+        # Print following at the beginning of configuration once
+        _print_openning() {
+            cat <<EOF
+==============================================
+       Configuring current environment
+==============================================
+
+EOF
+        }
+
+        # Print following at the end of configuration once
+        _print_closing() {
+            cat <<EOF
+
+==============================================
+  You just sourced the configuration script.
+
+ This gives you access to several commands to
+    execute in current terminal session.
+
+Each command as this whole script are designed
+ specifically for MEDAGG project and meant to
+   be used only in its context (directory).
+==============================================
+
+Commands:
+
+    1. setup        # Manages Python's virtual environment and isntalls requirements.
+
+    2. medagg       # Manage Django project. Alias for 'python manage.py'.
+                    # Note: Works properly only after 'setup'.
+
+EOF
+        }
+
+        _setup_env() {
+            # Source the environment variables that are
+            # located in ENV_DIR directory in project root
+            local __env_dir="$(dirname "$SCRIPT_FILE")"/"$ENV_DIR"
+            if ! [ -d "$__env_dir" ]; then
+                echo "Couldn't find $__env_dir/ directory!"
+                return 1
+            fi
+
+            echo "===Using env files from $__env_dir/==="
+
+            # List of credetial (.env) files
+            local -a __creds=(
+                "settings.env"
+                "database.env"
+            )
+
+            local __file=
+            for file in "${__creds[@]}"; do
+                __file="$__env_dir"/"$file"
+                if ! [ -f "$__file" ]; then
+                    echo "Couldn't find $__file, something might be off!"
+                    return 1
+                fi
+
+                echo "Sourcing from $(basename "$__file"):"
+
+                local __at_least_one=0
+                while IFS='=' read -r key val; do
+                    [[ "$key" ]] && {
+                        ((++__at_least_one))
+                        echo "--Exporting $key"
+                        eval 'export "$key"="$val"'
+                    }
+                done < <(sed 's/^//; s/=/=/; s/$//' "$__file")
+
+                ((__at_least_one)) || {
+                    echo "Couldn't find anything matching 'NAME=value' format!"
+                    return 1
+                }
+            done
+
+            echo "===End of using env==="
+        }
+
+        ###################
+        # Begin configure #
+        ###################
+
+        _print_openning && unset -f _print_openning
+
+        _setup_env && unset -f _setup_env || {
+            unset -f _setup_env
+            return 1
+        }
+
+        _print_closing && unset -f _print_closing
+
+        #################
+        # End configure #
+        #################
+
+        return # Do not proceed any further
+    }
+
+    cat <<EOF
+You've already sourced this script.
+
+Note: To source it again restart current terminal session.
+EOF
+    return
+else
+    cat <<EOF
+This script is not meant to be executed!
+
+Instead run:
+
+    source ./configure
+
+EOF
+    exit 0
+fi
+#
+# IMPORTANT: Don't write anything after this comment
+# as it might break not only the script, but the whole
+# terminal session that you would have to restart!
+#
+# Cosnsider this as permanent End Of File.
