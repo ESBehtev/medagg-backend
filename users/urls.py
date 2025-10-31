@@ -1,10 +1,26 @@
 from django.urls import path
+from rest_framework.routers import DefaultRouter
 
 from . import views
 
-app_name = "user"
+app_name = "users"
+
+router = DefaultRouter()
+
+router.register(r"", views.UserViewSet, basename="user")
+router.register(r"groups", views.GroupViewSet, basename="group")
+
+"""
+Add aditional urls that are not part of ViewSets.
+Note: Remember that every added bewlow will be part
+of 'users/' url-prefix.
+
+For example:
 urlpatterns = [
-    path("register/", views.UserRegistrationView.as_view(), name="register"),
-    path("login/", views.UserLoginView.as_view(), name="login"),
-    path("profile/", views.UserProfileView.as_view(), name="profile"),
+    path("foo", views.BarBazView.as_view(), name="foo-bar"),
 ]
+"""
+urlpatterns = []
+
+# Combine ViewSet's urls with others
+urlpatterns += router.urls

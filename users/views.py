@@ -1,36 +1,24 @@
-from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import render
-from django.views import generic
+from django.contrib.auth.models import Group, User
+from rest_framework import permissions, viewsets
+
+from .serializers import GroupSerializer, UserSerializer
 
 
-class UserRegistrationView(generic.View):
+class UserViewSet(viewsets.ModelViewSet):
     """
-    API endpoint that allows to register new user.
-    """
-
-    def post(self, request, *args, **kwargs):
-        """Register new user"""
-
-        return HttpResponseRedirect("New user created")
-
-
-class UserLoginView(generic.View):
-    """
-    API endpoint that allows user to login.
+    API endpoint that allows users to be viewed or edited.
     """
 
-    def post(self, request, *args, **kwargs):
-        """Authenticate a user"""
+    queryset = User.objects.all().order_by("-date_joined")
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-        return HttpResponseRedirect("You are logged in")
 
-
-class UserProfileView(generic.View):
+class GroupViewSet(viewsets.ModelViewSet):
     """
-    API endpoint that allows to get user info.
+    API endpoint that allows groups to be viewed or edited.
     """
 
-    def get(self, request, *args, **kwargs):
-        """Get user personal data and return it"""
-
-        return HttpResponse("Aleksey Bogomolov")
+    queryset = Group.objects.all().order_by("name")
+    serializer_class = GroupSerializer
+    permission_classes = [permissions.IsAuthenticated]
