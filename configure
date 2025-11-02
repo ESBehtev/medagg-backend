@@ -9,6 +9,7 @@ setup() {
     local -r __project_dir="$(dirname "$__script_file")"
     local -r __requirements_file="$__project_dir"/requirements.txt
     local -r __venv_dir="$__project_dir"/.venv
+    local -r __src_dir="$__project_dir"/src
 
     # Get system python
     local __python="$(
@@ -86,10 +87,12 @@ setup() {
 
         if [ -z "$answer" ] || [[ "$answer" =~ ^[yY]$ ]]; then
             echo "Clean start database."
+            # Remove local directory with database data
+            command "sudo" "rm" "--recursive" "--force" "$__data_dir" || {
+                echo "Failed to remove data dir $__data_dir."
+                return 1
+            }
             __cmd+=("--force-recreate") # Add flag to 'doker compose' command
-            __cmd+=( # Remove local directory with database data
-                "&&" "sudo" "rm" "-rf" "$__data_dir"
-            )
         elif [[ "$answer" =~ ^[nN]$ ]]; then
             echo "Just do what needs to be done."
         else
@@ -126,10 +129,13 @@ setup() {
         "Migrating database:" \
         "--Using $__venv_dir/bin/python executable"
 
-    command "$__venv_dir"/bin/python "$__project_dir"/manage.py migrate || {
+    command "$__venv_dir"/bin/python "$__src_dir"/manage.py migrate || {
         echo "ERROR: Failed to migrate database"
         return 1
     }
+
+    # Now we can safely create this alias
+    alias medagg="$__venv_dir/bin/python $__src_dir/manage.py"
 
     echo "You are good to go!"
 }
@@ -145,10 +151,8 @@ if [ "${BASH_SOURCE[0]}" != "$0" ]; then
         # during whole current terminal sesion
         export _LAZY_INIT_MEDAGG_CONF
 
-        alias medagg="python manage.py"
-
         SCRIPT_FILE="$(realpath "$0")"
-        ENV_DIR=".env"
+        SRC_DIR="$(dirname "$SCRIPT_FILE")"
 
         # Print following at the beginning of configuration once
         _print_openning() {
@@ -180,7 +184,7 @@ Commands:
     1. setup        # Manages Python's virtual environment and isntalls requirements.
 
     2. medagg       # Manage Django project. Alias for 'python manage.py'.
-                    # Note: Works properly only after 'setup'.
+                    # Note: Works only after 'setup'.
 
 EOF
         }
@@ -188,7 +192,7 @@ EOF
         _setup_env() {
             # Source the environment variables that are
             # located in ENV_DIR directory in project root
-            local __env_dir="$(dirname "$SCRIPT_FILE")"/"$ENV_DIR"
+            local __env_dir="$(dirname "$SRC_DIR")"/.env
             if ! [ -d "$__env_dir" ]; then
                 echo "Couldn't find $__env_dir/ directory!"
                 return 1

@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -39,9 +39,9 @@ INSTALLED_APPS = [
     # 3d-party apps
     "rest_framework",
     # Local apps
-    "datasets",
-    "search",
-    "users",
+    "apps.datasets",
+    "apps.search",
+    "apps.users",
 ]
 
 REST_FRAMEWORK = {
@@ -63,7 +63,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "app.urls"
+ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
@@ -80,7 +80,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "app.wsgi.application"
+WSGI_APPLICATION = "config.wsgi.application"
 
 
 # Database

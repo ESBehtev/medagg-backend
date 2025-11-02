@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import *
+from apps.datasets.models import *
 
 
 class AnatomicalAreaSerializer(serializers.ModelSerializer):
