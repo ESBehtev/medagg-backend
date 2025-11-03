@@ -1,58 +1,56 @@
-from rest_framework import generics, viewsets
+from rest_framework import generics, mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from apps.datasets.services import DatasetService
 from apps.search.services import SearchService
 
-from .serializers import SearchResponseSerializer
+from .serializers import SearchRequestSerializer, SearchResponseSerializer
 
 
-class SearchViewSet(viewsets.ViewSet):
+class BaseSearchViewSet(
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
     """
-    Search API for datasets
+    A viewset that provides `create` only action.
+
+    To use it:
+    1. Override the class and set the `.queryset` and `.serializer_class` attributes.
+    2. Override `.search()` method and handle search request as query_params or POST.
+    """
+
+    def search(self, request):
+        return self.get_queryset()
+
+    def create(self, request):
+        return self.search(request=request)
+
+
+class SearchDatasetsViewSet(BaseSearchViewSet):
+    """
+    Search datasets API endpoint that allows datasets to be searched with query.
     """
 
     @property
     def _search_service(self):
         return SearchService()
 
-    def list(self, request):
-        """
-        Search datasets with filters
-        ---
-        Parameters:
-        - q: Search term (title, description)
-        - anatomical_area: Filter by anatomical area ID
-        - modalities: Filter by modality IDs (comma-separated)
-        - ml_tasks: Filter by ML task IDs (comma-separated)
-        - tags: Filter by tag IDs (comma-separated)
-        - min_records: Minimum record count
-        - max_records: Maximum record count
-        - min_size: Minimum dataset size (MB)
-        - max_size: Maximum dataset size (MB)
-        - ordering: Order of datasets in resulting set
-        """
-        queryset = self._search_service.get_all(
-            q=request.GET.get("q"),
-            anatomical_area_id=request.GET.get("anatomical_area"),
-            modalities_ids=request.GET.get("modalities"),
-            ml_tasks_ids=request.GET.get("ml_tasks"),
-            tags_ids=request.GET.get("tags"),
-            min_records=request.GET.get("min_records"),
-            max_records=request.GET.get("max_records"),
-            min_size=request.GET.get("min_size"),
-            max_size=request.GET.get("max_size"),
-            ordering=request.GET.get("ordering", "-created_at"),
+    def get_serializer_class(self):
+        return SearchRequestSerializer
+
+    def get_queryset(self):
+        return self._search_service.default_datasets()
+
+    def search(self, request):
+        """Search for datasets"""
+        # TODO: Parse data
+        result_set = self._search_service.search_datasets(
+            query="",
+            filter_params={},
         )
 
         serializer = SearchResponseSerializer(
-            {"count": queryset.count(), "results": queryset}
+            {"count": result_set.count(), "results": result_set}
         )
         return Response(serializer.data)
-
-    @action(detail=False, methods=["get"])
-    def filters(self, request):
-        """
-        Get available filter options
-        """
-        return Response(self._search_service.get_all_filters())

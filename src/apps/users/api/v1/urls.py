@@ -7,8 +7,8 @@ app_name = "users"
 
 router = DefaultRouter()
 
-router.register(r"", views.UserViewSet, basename="user")
-router.register(r"groups", views.GroupViewSet, basename="group")
+router.register(r"", views.UserViewSet, basename="user-list")
+router.register(r"groups", views.GroupViewSet, basename="user-group-list")
 
 """
 Add aditional urls that are not part of ViewSets.

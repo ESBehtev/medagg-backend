@@ -12,6 +12,12 @@ class UserService:
         """
         return User.objects.all().order_by(order_by)
 
+    def get_one(self, id):
+        """
+        Get specific user by primary key (ID).
+        """
+        return User.objects.get(id=id)
+
 
 class GroupService:
     """
@@ -23,3 +29,9 @@ class GroupService:
         Get all groups ordered by the given parameter.
         """
         return Group.objects.all().order_by(order_by)
+
+    def get_one(self, id):
+        """
+        Get specific group by primary key (ID).
+        """
+        return Group.objects.get(id=id)

@@ -7,7 +7,7 @@ app_name = "search"
 
 router = DefaultRouter()
 
-router.register(r"", views.SearchViewSet, basename="search")
+router.register(r"datasets", views.SearchDatasetsViewSet, basename="search-datasets")
 
 """
 Add aditional urls that are not part of ViewSets.

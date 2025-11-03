@@ -25,8 +25,9 @@ urlpatterns = [
         "api/v1/",
         include(
             [
-                path("search", include("apps.search.api.v1.urls")),
-                path("datasets", include("apps.datasets.api.v1.urls")),
+                path("users/", include("apps.users.api.v1.urls")),
+                path("search/", include("apps.search.api.v1.urls")),
+                path("datasets/", include("apps.datasets.api.v1.urls")),
             ]
         ),
     ),

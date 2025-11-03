@@ -27,35 +27,7 @@ class TagSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class DatasetListSerializer(serializers.ModelSerializer):
-    anatomical_area_name = serializers.CharField(
-        source="anatomical_area.name", read_only=True
-    )
-    modalities = ModalitySerializer(many=True, read_only=True)
-    ml_tasks = MLTaskSerializer(many=True, read_only=True)
-    tags = TagSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Dataset
-        fields = [
-            "id",
-            "title",
-            "description",
-            "external_path",
-            "local_path",
-            "record_count",
-            "size",
-            "anatomical_area",
-            "anatomical_area_name",
-            "modalities",
-            "ml_tasks",
-            "tags",
-            "created_at",
-            "updated_at",
-        ]
-
-
-class DatasetDetailSerializer(serializers.ModelSerializer):
+class DatasetDetailedSerializer(serializers.ModelSerializer):
     anatomical_area_name = serializers.CharField(
         source="anatomical_area.name", read_only=True
     )
