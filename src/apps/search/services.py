@@ -1,6 +1,7 @@
 from django.db.models import Q
 
 from apps.datasets.models import Dataset
+from libs.medsearch import search as ms
 
 
 class SearchService:
@@ -41,6 +42,10 @@ class SearchService:
         - query: Search term (title, description)
         - filter_params: Parameters to filter the result set
         """
+
+        # TODO: Not yet implemented
+        search_result = ms.search(query, k=5)
+        print(f"Search result from medagg-search lib: {search_result}")
 
         # Search by title and description
         result_set = Dataset.objects.filter(
