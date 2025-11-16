@@ -93,6 +93,7 @@ medagg-backend/
     │       │   └── v1/
     │       ├── tests/
     │       └── migrations/
+    ├── libs/
     ├── common/
     └── config/
 ```
@@ -158,8 +159,9 @@ Directory in project root: `src/`.
 
 This is the main directory of a project splitted in 3 main parts:
 1. `apps` - every app is stored in here. When crerating a new [Django app](https://docs.djangoproject.com/en/5.2/ref/django-admin/#startapp) this should be a destination directory (or just `cd` into it). For more about app structure see [App](#app) section;
-2. `common` - optional directory containing common "stuff" for the entire project (e.g. constants, generics, etc.);
-3. `config` - directory for the project configuration files, including the primary URL file.
+2. `libs` - custom 3rd-party libraries are stored in here;
+3. `common` - optional directory containing common "stuff" for the entire project (e.g. constants, generics, etc.);
+4. `config` - directory for the project configuration files, including the primary URL file.
 
 > [!TIP]
 >

@@ -1,11 +1,13 @@
-from rest_framework import generics, mixins, viewsets
+from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.datasets.services import DatasetService
 from apps.search.services import SearchService
 
-from .serializers import SearchRequestSerializer, SearchResponseSerializer
+from .serializers import (SearchDatasetsGetSerializer,
+                          SearchDatasetsPostSerializer,
+                          SearchDatasetsRequestSerializer,
+                          SearchResponseSerializer)
 
 
 class BaseSearchViewSet(
@@ -17,7 +19,7 @@ class BaseSearchViewSet(
 
     To use it:
     1. Override the class and set the `.queryset` and `.serializer_class` attributes.
-    2. Override `.search()` method and handle search request as query_params or POST.
+    2. Override `.search()` method and handle search request with POST `.data`.
     """
 
     def search(self, request):
@@ -29,7 +31,7 @@ class BaseSearchViewSet(
 
 class SearchDatasetsViewSet(BaseSearchViewSet):
     """
-    Search datasets API endpoint that allows datasets to be searched with query.
+    Search API endpoint that allows datasets to be searched with query.
     """
 
     @property
@@ -37,20 +39,37 @@ class SearchDatasetsViewSet(BaseSearchViewSet):
         return SearchService()
 
     def get_serializer_class(self):
-        return SearchRequestSerializer
+        return SearchDatasetsPostSerializer
 
     def get_queryset(self):
         return self._search_service.default_datasets()
 
     def search(self, request):
-        """Search for datasets"""
-        # TODO: Parse data
+        """Get filtered datasets"""
+
+        # POST data is already initialized, so we need to
+        # combine it with GET query params and check if it's valid.
+        req_serializer = SearchDatasetsRequestSerializer(
+            # TODO: Extract this to some middleware where the request is serialized by ViewSet
+            data={"get": request.query_params, "post": request.data}
+        )
+        if not req_serializer.is_valid():
+            return Response(req_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Search for datasets using the given query
         result_set = self._search_service.search_datasets(
-            query="",
-            filter_params={},
+            query=req_serializer.data["post"]["query"],
+            filter_params=req_serializer.data["get"],
         )
 
-        serializer = SearchResponseSerializer(
+        # Serialize the response
+        res_serializer = SearchResponseSerializer(
             {"count": result_set.count(), "results": result_set}
         )
-        return Response(serializer.data)
+        return Response(res_serializer.data)
+
+    @action(detail=False, methods=["get"])
+    def filters(self, request):
+        """Get available filter options"""
+        # TODO: Extract filters from SearchDatasetsFilterParamsSerializer
+        pass

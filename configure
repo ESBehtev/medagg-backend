@@ -167,6 +167,85 @@ warn() {
 # info(): info MSG
 info() { printf '%s\n' "$ME: info: $1"; }
 
+# restore_file(): restore_file FROM TO
+restore_file() {
+    local _from="$1" _to="$2"
+
+    info "restoring:"
+
+    [ -r "$_from" ] || error $? "could not read $_from" &&
+        [ -w "$_to" ] || error $? "could not write to $_to" && {
+        # Override _new_file
+        backup_file "$_from" "$_to"
+    }
+
+    rm_command=(
+        "rm"
+    )
+
+    rm_command_options=(
+        "--force"
+        "--verbose"
+        "--interactive=never"
+    )
+
+    rm_command_args=(
+        "$_from"
+    )
+
+    rm_file=(
+        "${rm_command[@]}"
+        "${rm_command_options[@]}"
+        "${rm_command_args[@]}"
+    )
+
+    # Remove redundent file
+    command "${rm_file[@]}" ||
+        error $? "failed to remove $_file."
+}
+
+# backup_file(): backup_file OLD_FILE NEW_FILE
+backup_file() {
+    local _old_file="$1" _new_file="${2:-$(mktemp)}"
+
+    cp_command=(
+        "cp"
+    )
+
+    cp_command_options=(
+        "--force"
+        "--no-target-directory"
+    )
+
+    cp_command_args=(
+        "$_old_file"
+        "$_new_file"
+    )
+
+    cp_requirements_to_tmp=(
+        "${cp_command[@]}"
+        "${cp_command_options[@]}"
+        "${cp_command_args[@]}"
+    )
+
+    command "${cp_requirements_to_tmp[@]}" ||
+        error $? "failed to make a copy of $_old_file."
+
+    echo "$_new_file"
+}
+
+# collect_requirements(): collect_requirements PATTERN DEST
+collect_requirements() {
+    local _pattern="$1" _dest="$2"
+    [ -w "$2" ] || error $? "given wrong destination requirements file."
+    for txt in "$(realpath $_pattern)"; do
+        [ -r "$txt" ] && {
+            info "collecting requirements from: $txt..."
+            cat "$txt" >>"$_dest"
+        }
+    done
+}
+
 parse_opts() {
     while (($#)); do
         case "$1" in
@@ -206,7 +285,48 @@ BUILD_LOCAL=0
 
 parse_opts "$@"
 
+#--Begin--#
 print_openning
+
+#--Setup--#
+
+TESTGIT=("git")
+
+GIT= # Ensure git is installed
+get_exec TESTGIT GIT ||
+    error $? "could not find git."
+
+info "pulling libraries..."
+
+git_command=(
+    "$GIT"
+    "submodule"
+)
+
+command_options=(
+    "--init"
+)
+
+git_submodule_update=(
+    "${git_command[@]}"
+    "update" # submodule command
+    "${command_options[@]}"
+)
+
+command "${git_submodule_update[@]}" || {
+    warn "failed to pull libraries."
+} && {
+    info "creating backup requirements file"
+
+    requirements_tmp="$(backup_file $REQUIREMENTS)"
+
+    info "collecting all requirements into single file"
+
+    libs="$PROJECT"/src/libs
+    lib_requirements_pattern="$libs"/*/"$REQUIREMENTS"
+
+    collect_requirements "$lib_requirements_pattern" "$REQUIREMENTS"
+}
 
 #--Docker build--#
 
@@ -436,4 +556,10 @@ print_openning
         error $? "failed to migrate database"
 }
 
+#--Cleanup--#
+info "post cinfigure clean up..."
+
+restore_file "$requirements_tmp" $REQUIREMENTS
+
+#--End--#
 print_closing

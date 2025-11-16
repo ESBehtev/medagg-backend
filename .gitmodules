@@ -1,0 +1,4 @@
+[submodule "src/libs/medsearch"]
+	path = src/libs/medsearch
+	url = https://github.com/ESBehtev/medagg-search.git
+	branch = submodule
