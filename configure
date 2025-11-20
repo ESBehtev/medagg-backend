@@ -1,0 +1,565 @@
+#!/bin/env bash
+
+# IMPORTANT: Keep this at the beggining of the script
+# to prevent it from being sourced!
+[ "${BASH_SOURCE[0]}" != "$0" ] && {
+    cat <<EOF
+This script is not meant to be sourced!
+
+Instead run:
+
+    bash ./configure
+
+EOF
+    exit 0
+}
+
+# TODO: Consider using lock, to avoid multiple runs.
+
+#------------------#
+# Helper functions #
+#------------------#
+
+# Print following at the beginning of configuration once
+print_openning() {
+    cat <<EOF
+==============================================
+       BEGIN configuring Medagg project
+==============================================
+
+EOF
+}
+
+# Print following at the end of configuration once
+print_closing() {
+    cat <<EOF
+
+==============================================
+        END configuring Medagg project
+==============================================
+EOF
+}
+
+# create_activation_script(): create_activation_script SCRIPT VENV_SCRIPT ENV ENV_FILES
+create_activation_script() {
+    local -n _script="$1" _venv_script="$2" _env="$3" _env_files="$4"
+    cat >"$_script" <<EOF
+activate_venv() {
+    echo "Activating python venv..."
+
+    source "${_venv_script}" || {
+        echo "Failed: ${_venv_script}: script finished with exit code greater than zero."
+        return 1
+    }
+
+    echo "Finished: python venv was successfully activated."
+}
+
+configure_env() {
+    echo "Configuring environment..."
+
+    local _env="${_env}"
+    [ -d "$_env" ]  || {
+        echo "Failed: $_env_dir/: couldn't find directory."
+        return 1
+    } && {
+        local _file=
+        for file in "${_env_files[@]}"; do
+            echo "Sourcing: $_file"
+
+            _file="$_env"/"$file"
+            [ -r "$_file" ]  || {
+                echo "Failed: $_file: no such env file."
+                return 1
+            } && {
+                local _at_least_one=0
+                while IFS='=' read -r key val; do
+                    [ -n "$key" ] && {
+                        ((++_at_least_one))
+                        echo "Exporting: $key"
+                        eval 'export "$key"="$val"'
+                    }
+                done < <(sed 's/^//; s/=/=/; s/$//' "$_file")
+
+                ((_at_least_one)) || {
+                    echo "Failed: Invalid env file format: NAME=value."
+                    return 1
+                }
+            }
+        done
+    }
+
+    alias medagg="${PROJECT_ALIAS}"
+
+    echo "Finished: environment was successfully configured."
+}
+
+activate_venv && unset -f activate_venv ||
+    printf '%s\n' \
+        "Fix the issue that has occured during venv activation" \
+        "and restart the process with 'activate_venv' command."
+
+configure_env && unset -f configure_env ||
+    printf '%s\n' \
+        "Fix the issue that has occured during env configuration" \
+        "and restart the process with 'configure_venv' command."
+EOF
+    return
+}
+
+# set_status(): get_exec TESTEXEC EXEC
+get_exec() {
+    local -n _testexec="$1"
+    local -n _exec="$2"
+
+    for e in "${_testexec[@]}"; do
+        _exec="$(
+            command -v "$e"
+        )" && {
+            echo "found $_exec"
+            return
+        }
+    done
+
+    return 1
+}
+
+# set_status(): set_status STATUS
+set_status() { return $1; }
+
+# do_exit(): do_exit STATUS
+do_exit() {
+    set +e
+    set_status $1
+    exit $1
+}
+
+# error(): error STATUS MSG [LINENO] [LOG_FD]
+error() {
+    # Last exit status
+    local _status="$1"
+    ((_status)) || _status=1
+
+    fd_is_open() (: >&$1) 2>/dev/null
+    if fd_is_open "$4"; then
+        # Line number of call-site
+        local _lineno="${3-$LINENO}"
+        printf '%s\n' "$ME:$_lineno: error: $2" >&$4
+    fi
+
+    printf '%s\n' "$ME: error: $2" >&2
+
+    do_exit $_status
+}
+
+# warn(): warn MSG [LINENO] [LOG_FD]
+warn() {
+    fd_is_open() (: >&$1) 2>/dev/null
+    if fd_is_open "$3"; then
+        # Line number of call-site
+        local _lineno="${2-$LINENO}"
+        printf '%s\n' "$ME:$_lineno: warning: $1" >&$3
+    fi
+
+    printf '%s\n' "$ME: warning: $1" >&2
+}
+
+# info(): info MSG
+info() { printf '%s\n' "$ME: info: $1"; }
+
+# restore_file(): restore_file FROM TO
+restore_file() {
+    local _from="$1" _to="$2"
+
+    info "restoring:"
+
+    [ -r "$_from" ] || error $? "could not read $_from" &&
+        [ -w "$_to" ] || error $? "could not write to $_to" && {
+        # Override _new_file
+        backup_file "$_from" "$_to"
+    }
+
+    rm_command=(
+        "rm"
+    )
+
+    rm_command_options=(
+        "--force"
+        "--verbose"
+        "--interactive=never"
+    )
+
+    rm_command_args=(
+        "$_from"
+    )
+
+    rm_file=(
+        "${rm_command[@]}"
+        "${rm_command_options[@]}"
+        "${rm_command_args[@]}"
+    )
+
+    # Remove redundent file
+    command "${rm_file[@]}" ||
+        error $? "failed to remove $_file."
+}
+
+# backup_file(): backup_file OLD_FILE NEW_FILE
+backup_file() {
+    local _old_file="$1" _new_file="${2:-$(mktemp)}"
+
+    cp_command=(
+        "cp"
+    )
+
+    cp_command_options=(
+        "--force"
+        "--no-target-directory"
+    )
+
+    cp_command_args=(
+        "$_old_file"
+        "$_new_file"
+    )
+
+    cp_requirements_to_tmp=(
+        "${cp_command[@]}"
+        "${cp_command_options[@]}"
+        "${cp_command_args[@]}"
+    )
+
+    command "${cp_requirements_to_tmp[@]}" ||
+        error $? "failed to make a copy of $_old_file."
+
+    echo "$_new_file"
+}
+
+# collect_requirements(): collect_requirements PATTERN DEST
+collect_requirements() {
+    local _pattern="$1" _dest="$2"
+    [ -w "$2" ] || error $? "given wrong destination requirements file."
+    for txt in "$(realpath $_pattern)"; do
+        [ -r "$txt" ] && {
+            info "collecting requirements from: $txt..."
+            cat "$txt" >>"$_dest"
+        }
+    done
+}
+
+parse_opts() {
+    while (($#)); do
+        case "$1" in
+        -d | -docker | --docker)
+            # Build Docker container
+            BUILD_DOCKER=1
+            BUILD_LOCAL=0
+            shift
+            ;;
+        -l | -local | --local)
+            # Build locally
+            BUILD_DOCKER=0
+            BUILD_LOCAL=1
+            # TODO: In progress
+            error $? "Unsupported options"
+            ;;
+        *) error $? "unknown option." ;;
+        esac
+    done
+}
+
+#------------------#
+#   Begin script   #
+#------------------#
+
+set -e
+readonly ME="$(basename "$0")"
+readonly SCRIPT="$(realpath "$0")"
+readonly PROJECT="$(dirname "$SCRIPT")"
+readonly REQUIREMENTS=requirements.txt
+set +e
+
+BUILD_DOCKER=0
+BUILD_LOCAL=0
+
+#--Opts--#
+
+parse_opts "$@"
+
+#--Begin--#
+print_openning
+
+#--Setup--#
+
+TESTGIT=("git")
+
+GIT= # Ensure git is installed
+get_exec TESTGIT GIT ||
+    error $? "could not find git."
+
+info "pulling libraries..."
+
+git_command=(
+    "$GIT"
+    "submodule"
+)
+
+command_options=(
+    "--init"
+)
+
+git_submodule_update=(
+    "${git_command[@]}"
+    "update" # submodule command
+    "${command_options[@]}"
+)
+
+command "${git_submodule_update[@]}" || {
+    warn "failed to pull libraries."
+} && {
+    info "creating backup requirements file"
+
+    requirements_tmp="$(backup_file $REQUIREMENTS)"
+
+    info "collecting all requirements into single file"
+
+    libs="$PROJECT"/src/libs
+    lib_requirements_pattern="$libs"/*/"$REQUIREMENTS"
+
+    collect_requirements "$lib_requirements_pattern" "$REQUIREMENTS"
+}
+
+#--Docker build--#
+
+((BUILD_DOCKER)) && {
+    TESTDOCKER=("docker")
+
+    DOCKER= # Ensure docker is installed
+    get_exec TESTDOCKER DOCKER ||
+        error $? "could not find docker."
+
+    #==Check==#
+    local_database="$PROJECT"/db/data
+
+    [ -d "$local_database" ] && {
+        warn "found existing local database. cleaning..."
+
+        rm_options=(
+            "--recursive"
+            "--force"
+        )
+
+        rm_args=(
+            "$local_database"
+        )
+
+        rm_local_database=(
+            "sudo" # We need root privileges for this one
+            "rm"
+            "${rm_options[@]}"
+            "${rm_args[@]}"
+        )
+
+        # Remove local directory with database data
+        command "${rm_local_database[@]}" ||
+            error $? "failed to remove local database."
+    }
+
+    #==Build==#
+    info "begin docker container build..."
+
+    compose_file="$PROJECT"/docker-compose.yml
+    container_name="$(basename "$PROJECT")"
+
+    compose_command=(
+        "$DOCKER"
+        "compose"
+    )
+
+    # Setup docker options
+    compose_options=(
+        "-f" "$compose_file"
+        "-p" "$container_name"
+    )
+
+    command_options=(
+        "--build"
+        "--detach"
+        "--force-recreate"
+        "--pull" "missing"
+        "--remove-orphans"
+        "--wait"
+        "--yes"
+    )
+
+    docker_compose_up=(
+        "${compose_command[@]}"
+        "${compose_options[@]}"
+        "up" # compose command
+        "${command_options[@]}"
+    )
+
+    command "${docker_compose_up[@]}" || {
+        info "saving logs to a log file..."
+
+        # FIXME: Add directory for logs
+        log_file="$PROJECT"/docker_compose.log
+
+        command_options=(
+            "--no-color"
+            "--timestamps"
+        )
+
+        docker_compose_logs=(
+            "${compose_command[@]}"
+            "${compose_options[@]}"
+            "logs"
+            "${command_options[@]}"
+        )
+
+        command "${docker_compose_logs[@]}" >"$log_file" &&
+            info "for more info see logs in $(basename "$log_file")" ||
+            warn "failed to save to log file."
+
+        info "stopping and removing containers..."
+
+        docker_compose_down=(
+            "${compose_command[@]}"
+            "${compose_options[@]}"
+            "down" # Will remove containers automatically
+        )
+
+        command "${docker_compose_down[@]}" ||
+            warn "failed to stop containers."
+
+        error $? "failed to run docker compose."
+    }
+}
+
+#--TODO: Local build--#
+
+((BUILD_LOCAL)) && {
+    TESTPYTHON=("python" "python3")
+
+    PYTHON= # Ensure python is installed
+    get_exec TESTPYTHON PYTHON ||
+        error $? "could not find python."
+
+    #==Venv==#
+    venv="$PROJECT"/.venv
+    new_python="$venv"/bin/python
+
+    [ -x "$new_python" ] || {
+        info "creating new python venv in $venv..."
+
+        venv_mod_options=(
+            "--upgrade-deps"
+        )
+
+        venv_mod_args=(
+            "$venv"
+        )
+
+        python_create_venv=(
+            "$PYTHON"
+            "-m" "venv" # Library module 'venv'
+            "${venv_mod_options[@]}"
+            "${venv_mod_args[@]}"
+        )
+
+        command "${python_create_venv[@]}" ||
+            error $? "failed to create python venv."
+
+        info "successfully created python venv."
+    } && {
+        info "found existing python venv. skipping..."
+    }
+
+    # Use new python for proper module detection
+    PYTHON="$new_python"
+
+    #==Requirements==#
+    [ -f "$REQUIREMENTS" ] || {
+        # TODO: Do we want to just skip,
+        # e.g. for some debug purposes?
+        error $? "$requirements: no such file."
+    } && {
+        info "begin requirements installation..."
+
+        pip_mod_commands=(
+            "install"
+        )
+
+        pip_mod_options=(
+            "-r"
+        )
+
+        pip_mod_args=(
+            "$venv"
+        )
+
+        python_install_requirements=(
+            "$PYTHON"
+            "-m" "pip" # Library module 'pip'
+            "${pip_mod_commands[@]}"
+            "${pip_mod_options[@]}"
+            "${pip_mod_args[@]}"
+        )
+
+        command "${python_install_requirements[@]}" ||
+            error $? "failed to install requirements."
+
+        info "successfully created python venv."
+    }
+
+    #==Alias==#
+    info "creating aliases for better dev expirience..."
+
+    project_src="$PROJECT/src"
+
+    python_args=(
+        "$project_src"/manage.py
+    )
+
+    python_project_alias=(
+        "$PYTHON"
+        "${python_args[@]}"
+    )
+
+    PROJECT_ALIAS="$python_project_alias"
+
+    #==Activation script==#
+    info "creating script for environment setup..."
+
+    script="$PROJECT"/activate
+
+    venv_script="$venv"/bin/activate
+
+    env="${PROJECT}"/.env
+
+    # List of files that should be present in .env/.
+    env_files=(
+        "settings.env"
+        "database.env"
+    )
+
+    create_activation_script script venv_script env env_files
+
+    #==Migration==#
+    info "migrating database..."
+
+    project_db_migration=(
+        "$PROJECT_ALIAS" # Alias we created above
+        "migrate"
+    )
+
+    command "${project_db_migration[@]}" ||
+        error $? "failed to migrate database"
+}
+
+#--Cleanup--#
+info "post cinfigure clean up..."
+
+restore_file "$requirements_tmp" $REQUIREMENTS
+
+#--End--#
+print_closing
