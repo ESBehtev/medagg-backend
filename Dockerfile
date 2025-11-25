@@ -14,8 +14,12 @@ ENV PYTHONUNBUFFERED=1
 RUN pip install --upgrade pip
 
 COPY requirements.txt /app/
+COPY src/libs/*/requirements.txt /app/libs/
 
+# Install main requirements
 RUN pip install --no-cache-dir -r requirements.txt
+# Install libs' requirements
+RUN find libs -name requirements.txt -exec pip install --no-cache-dir -r {} \;
 
 #############################
 # Stage 2: Production stage #
