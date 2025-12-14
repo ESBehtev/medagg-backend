@@ -10,11 +10,15 @@ class DatasetService:
         """
         Get specific dataset with all known information about it.
         """
-        return (
-            Dataset.objects.get(id=id)
-            .select_related("anatomical_area")
-            .prefetch_related("modalities", "ml_tasks", "tags")
-        )
+        try:
+            return (
+                Dataset.objects.select_related("anatomical_area")
+                .prefetch_related("modalities", "ml_tasks", "tags")
+                .get(id=id)
+            )
+        except Dataset.DoesNotExist:
+            # TODO: Handle/log error
+            return None
 
     def get_all_detailed(self):
         """

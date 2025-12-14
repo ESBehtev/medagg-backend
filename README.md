@@ -96,6 +96,34 @@ Vary: Accept
 
 </details>
 
+<details><summary> GET /api/v1/datasets/{id} </summary>
+
+```http
+Allow: GET, HEAD, OPTIONS
+Content-Type: application/json
+Vary: Accept
+
+{
+    "id": 1,
+    "title": "...",
+    "description": "...",
+    "external_path": null,
+    "local_path": null,
+    "record_count": null,
+    "size": null,
+    "license": "...",
+    "anatomical_area": 1,
+    "anatomical_area_name": "...",
+    "modalities": [],
+    "ml_tasks": [],
+    "tags": [],
+    "created_at": "...",
+    "updated_at": "..."
+}
+```
+
+</details>
+
 <details><summary> GET /api/v1/search/datasets (405) </summary>
 
 ```http
