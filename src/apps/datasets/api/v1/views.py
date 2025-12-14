@@ -1,4 +1,4 @@
-from rest_framework import generics, viewsets
+from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 
 from apps.datasets.services import DatasetService
@@ -33,7 +33,11 @@ class DatasetsViewSet(viewsets.ReadOnlyModelViewSet):
         Get detailed information about a specific dataset
         """
         if not pk:
-            return Response("Provide primary key")
+            return Response("Provide primary key", status=status.HTTP_400_BAD_REQUEST)
+
         dataset = self._dataset_service.get_one_detailed(id=pk)
+        if not dataset:
+            return Response("Dataset does not exist", status=status.HTTP_404_NOT_FOUND)
+
         serializer = self.get_serializer(dataset)
         return Response(serializer.data)
