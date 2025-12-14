@@ -37,6 +37,7 @@ class Dataset(models.Model):
     local_path = models.CharField(max_length=500, blank=True, null=True)
     record_count = models.IntegerField(blank=True, null=True)
     size = models.IntegerField(blank=True, null=True)
+    license = models.CharField(max_length=500, blank=True)
     anatomical_area = models.ForeignKey(
         AnatomicalArea, on_delete=models.SET_NULL, null=True
     )

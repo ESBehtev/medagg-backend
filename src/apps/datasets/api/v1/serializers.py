@@ -45,6 +45,7 @@ class DatasetDetailedSerializer(serializers.ModelSerializer):
             "local_path",
             "record_count",
             "size",
+            "license",
             "anatomical_area",
             "anatomical_area_name",
             "modalities",
