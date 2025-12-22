@@ -30,7 +30,7 @@ services:
     #    tmpfs:
     #      size: 134217728 # 128*2^20 bytes = 128Mb
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -d $$DB_NAME -U $$DB_USER"]
       interval: 10s
       retries: 5
       start_period: 30s
@@ -85,6 +85,8 @@ services:
       - path: ./.env/settings.env
         required: true
       - path: ./.env/database.env
+        required: true
+      - path: ./.env/sources.env
         required: true
     ports:
       - "8000:8000"
