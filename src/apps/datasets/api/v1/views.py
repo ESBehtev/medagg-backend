@@ -4,8 +4,6 @@ from rest_framework.response import Response
 from apps.datasets.services import DatasetService
 
 from .serializers import DatasetDetailedSerializer
-
-
 class DatasetsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Datasets API endpoint that allows datasets to be viewed only.
