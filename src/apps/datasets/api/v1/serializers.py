@@ -34,6 +34,7 @@ class DatasetDetailedSerializer(serializers.ModelSerializer):
     modalities = ModalitySerializer(many=True, read_only=True)
     ml_tasks = MLTaskSerializer(many=True, read_only=True)
     tags = TagSerializer(many=True, read_only=True)
+    readme_content = serializers.CharField(read_only=True)  # <-- ДОБАВЬТЕ ЭТУ СТРОКУ
 
     class Meta:
         model = Dataset
@@ -52,4 +53,5 @@ class DatasetDetailedSerializer(serializers.ModelSerializer):
             "tags",
             "created_at",
             "updated_at",
+            "readme_content",
         ]
