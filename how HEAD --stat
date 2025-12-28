@@ -1,0 +1,18 @@
+[33mcommit 2347e887cabecbf5dcf72625a4cedc9e7bdc5315[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeature/readme[m[33m)[m
+Author: nasti <nasti.listic@mail.ru>
+Date:   Sun Dec 28 03:55:48 2025 +0300
+
+    feat: Add auto-generated README for datasets
+    
+    - Added readme_content field to Dataset model with migration
+    - Implemented DatasetReadmeGenerator service for automatic README generation
+    - Updated Dataset model save() method to auto-generate README
+    - Fixed DatasetService import in API views
+    - Added readme_content field to DatasetDetailedSerializer
+    - All datasets now have auto-generated README in API responses
+    - Resolves issue with missing readme_content column in database
+
+src/apps/datasets/api/v1/serializers.py
+src/apps/datasets/api/v1/views.py
+src/apps/datasets/services/__init__.py
+src/apps/datasets/services/services.py
